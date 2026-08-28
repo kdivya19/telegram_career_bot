@@ -1,91 +1,3 @@
-# import os
-# from dotenv import load_dotenv
-# from langchain_google_community import GmailToolkit
-# from langchain_google_community.gmail.utils import get_gmail_credentials, build_gmail_service
-# from langchain.agents import create_agent
-# from langchain_core.messages import HumanMessage, AIMessage
-
-# load_dotenv()
-
-# # ప్రతి యూజర్ యొక్క చాట్ హిస్టరీని సేవ్ చేయడానికి గ్లోబల్ డిక్షనరీ
-# session_histories = {}
-# _agent = None
-
-# def get_agent_instance():
-#     """this helps to initialize the agent only once"""
-#     credentials = get_gmail_credentials(
-#         "token.json",
-#         "credentials.json",
-#         scopes=["https://mail.google.com/"],
-#     )
-#     api_resource = build_gmail_service(credentials=credentials)
-#     toolkit = GmailToolkit(api_resource=api_resource)
-#     gmail_tools = toolkit.get_tools()
-
-#     # జెమిని ఏజెంట్ క్రియేషన్ [1]
-#     gmail_agent = create_agent(
-#         model="google_genai:gemini-2.5-flash-lite", # [1]
-#         tools=gmail_tools,
-#         system_prompt=(
-#             "You are a professional Gmail assistant and a helpful conversational companion. "
-#             "1. If the user explicitly asks you to draft or write an email, strictly use the 'create_gmail_draft' tool. "
-#             "Use placeholders like [My Name] for any missing information and call the tool immediately. "
-#             "Once the draft is created, clearly confirm to the user that the draft has been created in their Gmail. "
-#             "2. If the user asks general questions (like 'how long will it take?', 'who are you?', 'hello', etc.), "
-#             "DO NOT call any Gmail tools. Just answer them naturally, politely, and conversationally based on the chat history."
-#         )
-#     )
-#     return gmail_agent
-
-# def run_gmail_agent(user_id: int, user_message: str) -> str:
-#     """
-#     takes the user id and message and maintains the short term memory of the gemini-agent
-#     """
-#     global _agent
-#     if _agent is None:
-#         _agent = get_agent_instance()
-
-#     # 1. ఒకవేళ ఈ యూజర్ కి హిస్టరీ లేకపోతే కొత్తగా క్రియేట్ చేయాలి
-#     if user_id not in session_histories:
-#         session_histories[user_id] = []
-
-#     # 2. కొత్త యూజర్ మెసేజ్ ని హిస్టరీ కి యాడ్ చేయాలి
-#     session_histories[user_id].append(HumanMessage(content=user_message))
-
-#     # 3. పూర్తి హిస్టరీ ని ఏజెంట్ కి పంపాలి
-#     response = _agent.invoke({
-#         "messages": session_histories[user_id]
-#     })
-
-#     # 4. అప్‌డేట్ అయిన పూర్తి హిస్టరీ ని సేవ్ చేయాలి
-#     session_histories[user_id] = response["messages"]
-
-#     # 5. చివరి మెసేజ్ నుండి సురక్షితంగా రిప్లై టెక్స్ట్ ని ఎక్స్‌ట్రాక్ట్ చేయడం [1]
-#     last_message = response["messages"][-1]
-#     reply_text = ""
-    
-#     # content_blocks లోపల మొదటి ఎలిమెంట్ ని  ఇండెక్స్ ద్వారా కరెక్ట్ గా యాక్సెస్ చేస్తున్నాం
-#     if hasattr(last_message, "content_blocks") and last_message.content_blocks:
-#         blocks = last_message.content_blocks
-#         if isinstance(blocks, list) and len(blocks) > 0:
-#             first_block = blocks  # ఇక్కడ ఇండెక్స్  సరిగ్గా యాడ్ చేసాను!
-#             if isinstance(first_block, dict):
-#                 reply_text = first_block.get("text", "")
-#             elif isinstance(first_block, str):
-#                 reply_text = first_block
-                
-#     # ఒకవేళ పైన లాజిక్ ద్వారా టెక్స్ట్ రాకపోతే .content ని వాడుతుంది
-#     if not reply_text and hasattr(last_message, "content") and last_message.content:
-#         reply_text = last_message.content
-        
-#     if not reply_text:
-#         reply_text = "No response from AI Agent."
-
-#     return reply_text
-
-
-
-
 import os
 import base64
 from email.mime.multipart import MIMEMultipart
@@ -102,7 +14,7 @@ from langchain_core.tools import tool
 
 load_dotenv()
 
-# ప్రతి యూజర్ యొక్క చాట్ హిస్టరీని సేవ్ చేయడానికి గ్లోబల్ డిక్షనరీ
+# Global dictionary to store every user's chat history
 session_histories = {}
 _agent = None
 
@@ -124,15 +36,15 @@ def create_draft_with_resume(to: str, subject: str, body: str) -> str:
         except Exception:
             service = build_gmail_service(credentials=credentials)
         
-        # MIME Message క్రియేషన్
+        # MIME Message creation
         message = MIMEMultipart()
         message['to'] = to
         message['subject'] = subject
         
-        # ఇమెయిల్ బాడీని ప్లెయిన్ టెక్స్ట్ లాగా యాడ్ చేస్తున్నాం (లింకులు ఉండవు)
+        # Adding email body as plain text
         message.attach(MIMEText(body, 'plain'))
         
-        # లోకల్ ఫోల్డర్ నుండి resume.pdf ని అటాచ్ చేస్తున్నాం
+        # updating resume from local folder
         resume_path = "resume.pdf"
         if not os.path.exists(resume_path) and os.path.exists("Divya_AI_ML_Resume.pdf"):
             resume_path = "Divya_AI_ML_Resume.pdf"
@@ -155,7 +67,7 @@ def create_draft_with_resume(to: str, subject: str, body: str) -> str:
 
         raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
         
-        # జీమెయిల్ డ్రాఫ్ట్ క్రియేట్ చేయడం
+        # Creating a gmail draft
         if hasattr(service, "users"):
             service = service.users()
         if hasattr(service, "drafts"):
@@ -175,7 +87,7 @@ def create_draft_with_resume(to: str, subject: str, body: str) -> str:
 
 
 def get_agent_instance():
-    """ఏజెంట్ ని కేవలం ఒక్కసారి మాత్రమే ఇనిషియలైజ్ చేయడానికి సహాయపడుతుంది"""
+    """This is used to initialize the agent only omce"""
     credentials = get_gmail_credentials(
         "token.json",
         "credentials.json",
@@ -187,11 +99,11 @@ def get_agent_instance():
         api_resource = build_gmail_service(credentials=credentials)
     toolkit = GmailToolkit(api_resource=api_resource)
     
-    # కస్టమ్ టూల్ ని యాడ్ చేస్తున్నాం
+    # Adding custom tool
     gmail_tools = toolkit.get_tools()
     all_tools = gmail_tools + [create_draft_with_resume]
 
-    # జెమిని ఏజెంట్ క్రియేషన్ (లింకులు లేకుండా కఠినమైన రూల్స్ తో)
+    # Gemini agent creation
     gmail_agent = create_agent(
         model="google_genai:gemini-2.5-flash-lite",
         tools=all_tools,
@@ -210,8 +122,7 @@ def get_agent_instance():
 
 def run_gmail_agent(user_id: int, user_message: str) -> str:
     """
-    యూజర్ ఐడీ మరియు మెసేజ్ ని తీసుకుని, షార్ట్-టర్మ్ మెమొరీని 
-    మెయింటైన్ చేస్తూ జెమిని ఏజెంట్ ని రన్ చేస్తుంది.
+    Runs gemini agent by taking user message and user ID 
     """
     global _agent
     if _agent is None:
